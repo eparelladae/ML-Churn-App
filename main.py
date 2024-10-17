@@ -109,7 +109,7 @@ input_data.loc[0] = 0  # Inicia todas las variables en 0
 input_data['tenure'] = tenure
 input_data['MonthlyCharges'] = monthly_charges
 input_data['MonthlyCharge_Tenure'] = monthly_charges * tenure
-input_data['HighCharges'] = (monthly_charges > 70).astype(int)
+input_data['HighCharges'] = int(monthly_charges > 70)
 
 # Convertir género a dummies
 if gender == "Male":
