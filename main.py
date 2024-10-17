@@ -92,7 +92,7 @@ st.write(f"Precisión promedio de validación cruzada en test: {cv_mean_score:.2
 
 # Entradas de usuario para predicción de nuevo cliente
 st.sidebar.title("Introduce datos de un nuevo cliente:")
-tenure = st.sidebar.slider("Months as a client", min_value=int(X['tenure'].min()), max_value=int(X['tenure'].max()), step=1)
+tenure = st.sidebar.slider("Antigüedad (en meses)", min_value=int(X['tenure'].min()), max_value=int(X['tenure'].max()), step=1)
 monthly_charges = st.sidebar.number_input("Monthly Charges", min_value=0.0, step=0.1)
 
 # Entradas para variables categóricas
@@ -129,10 +129,11 @@ elif payment_method == "Mailed check":
 elif payment_method == "Credit card (automatic)":
     input_data['PaymentMethod_Credit card (automatic)'] = 1
 
-# Escalar las variables numéricas del input de usuario usando el escalador entrenado
-input_data_scaled = scaler.transform(input_data)
+# Escalar las variables numéricas del input de usuario usando el escalador ajustado del pipeline
+fitted_scaler = best_model.named_steps['scaler']
+input_data_scaled = fitted_scaler.transform(input_data)
 
-# Predecir y mostrar resultado
+# Predecir la probabilidad de churn usando el mejor modelo entrenado
 churn_proba = best_model.predict_proba(input_data_scaled)[0][1] * 100  # probabilidad de churn
 st.write(f"Probabilidad de Churn: {churn_proba:.2f}%")
 
