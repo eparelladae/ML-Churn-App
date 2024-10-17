@@ -48,9 +48,9 @@ param_distributions = {
         "model__class_weight": ['balanced', None]
     },
     "XGBoost": {
-        "model__n_estimators": randint(50, 100),
-        "model__max_depth": randint(3, 8),
-        "model__learning_rate": uniform(0.01, 0.2)
+        "model__n_estimators": randint(20, 50),  # Reduce el rango de n_estimators
+        "model__max_depth": randint(3, 6),  # Reduce la profundidad máxima de los árboles
+        "model__learning_rate": uniform(0.1, 0.2)
     }
 }
 
