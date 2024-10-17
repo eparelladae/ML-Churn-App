@@ -92,7 +92,7 @@ st.write(f"Precisión promedio de validación cruzada en test: {cv_mean_score:.2
 
 # Entradas de usuario para predicción de nuevo cliente
 st.sidebar.title("Introduce datos de un nuevo cliente:")
-tenure = st.sidebar.slider("Antigüedad (en meses)", min_value=int(X['tenure'].min()), max_value=int(X['tenure'].max()), step=1)
+tenure = st.sidebar.slider("Months as a client", min_value=int(X['tenure'].min()), max_value=int(X['tenure'].max()), step=1)
 monthly_charges = st.sidebar.number_input("Monthly Charges", min_value=0.0, step=0.1)
 
 # Entradas para variables categóricas
