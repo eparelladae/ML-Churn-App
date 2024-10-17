@@ -6,13 +6,17 @@ from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, mean_squared_error
-from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.model_selection import RandomizedSearchCV, train_test_split, cross_val_score
 from sklearn.pipeline import Pipeline
+from scipy.stats import randint, uniform
 
 # Cargar el dataset procesado sin la columna 'TotalCharges'
 @st.cache_data
 def load_data():
     data = pd.read_csv('Telco-Customer-Churn-Final.csv').drop(columns=['TotalCharges'])
+    # Feature Engineering: crear nuevas variables
+    data['MonthlyCharge_Tenure'] = data['MonthlyCharges'] * data['tenure']
+    data['HighCharges'] = (data['MonthlyCharges'] > 70).astype(int)
     return data
 
 data = load_data()
@@ -23,64 +27,72 @@ y = data['Churn']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
 # Selección del modelo
-st.title("Predicción de Churn de Clientes con Optimización de Hiperparámetros")
+st.title("Predicción de Churn de Clientes con Optimización Avanzada")
 model_type = st.selectbox("Selecciona el tipo de modelo", ["Random Forest", "Logistic Regression", "Decision Tree", "XGBoost"])
 
-# Configuración de hiperparámetros para GridSearchCV
-param_grids = {
+# Configuración de hiperparámetros para RandomizedSearchCV
+param_distributions = {
     "Random Forest": {
-        "model__n_estimators": [50, 100, 150],
-        "model__max_depth": [10, 20, 30],
-        "model__min_samples_split": [2, 5, 10]
+        "model__n_estimators": randint(50, 150),
+        "model__max_depth": randint(10, 40),
+        "model__min_samples_split": randint(2, 10)
     },
     "Logistic Regression": {
-        "model__C": [0.1, 1.0, 10.0],
+        "model__C": uniform(0.1, 5),
         "model__solver": ['lbfgs', 'liblinear']
     },
     "Decision Tree": {
-        "model__max_depth": [10, 20, 30],
-        "model__min_samples_split": [2, 5, 10],
-        "model__min_samples_leaf": [1, 2, 4]
+        "model__max_depth": randint(5, 30),
+        "model__min_samples_split": randint(2, 8),
+        "model__min_samples_leaf": randint(1, 5),
+        "model__class_weight": ['balanced', None]
     },
     "XGBoost": {
-        "model__n_estimators": [50, 100, 150],
-        "model__max_depth": [3, 6, 10],
-        "model__learning_rate": [0.01, 0.1, 0.2]
+        "model__n_estimators": randint(50, 100),
+        "model__max_depth": randint(3, 8),
+        "model__learning_rate": uniform(0.01, 0.2)
     }
 }
 
-# Instanciar el modelo y configurar GridSearchCV
+# Instanciar el modelo y configurar RandomizedSearchCV
 if model_type == "Random Forest":
     model = RandomForestClassifier(random_state=42)
 elif model_type == "Logistic Regression":
-    model = LogisticRegression(max_iter=1000)
+    model = LogisticRegression(max_iter=500, class_weight='balanced')
 elif model_type == "Decision Tree":
     model = DecisionTreeClassifier(random_state=42)
 else:
     model = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
 
-# Configurar pipeline con escalado y grid search
+# Configurar pipeline con escalado y búsqueda aleatoria de hiperparámetros
+scaler = StandardScaler()
 pipe = Pipeline([
-    ('scaler', StandardScaler()),
+    ('scaler', scaler),
     ('model', model)
 ])
-grid_search = GridSearchCV(pipe, param_grids[model_type], cv=5, n_jobs=-1, scoring='accuracy')
+random_search = RandomizedSearchCV(pipe, param_distributions[model_type], n_iter=20, cv=3, n_jobs=-1, scoring='accuracy', random_state=42)
 
 # Entrenar el modelo con la mejor combinación de hiperparámetros
-grid_search.fit(X_train, y_train)
-best_model = grid_search.best_estimator_
+random_search.fit(X_train, y_train)
+best_model = random_search.best_estimator_
+
+# Validación cruzada en el conjunto de prueba para evaluar el modelo
+cv_scores = cross_val_score(best_model, X_test, y_test, cv=3, scoring='accuracy')
+cv_mean_score = cv_scores.mean()
+
+# Hacer predicciones en el conjunto de prueba y calcular métricas
 preds = best_model.predict(X_test)
 accuracy = accuracy_score(y_test, preds)
 error = mean_squared_error(y_test, preds)
 
-# Mostrar los resultados del modelo optimizado
-
-st.write(f"Precisión del modelo {model_type} optimizado: {accuracy:.2%}")
-st.write(f"Error cuadrático medio del modelo: {error:.2f}")
+# Mostrar resultados de precisión y errores del modelo optimizado
+st.write(f"Precisión del modelo {model_type} optimizado en test: {accuracy:.2%}")
+st.write(f"Error cuadrático medio del modelo en test: {error:.2f}")
+st.write(f"Precisión promedio de validación cruzada en test: {cv_mean_score:.2%}")
 
 # Entradas de usuario para predicción de nuevo cliente
 st.sidebar.title("Introduce datos de un nuevo cliente:")
-tenure = st.sidebar.slider("Tenure", min_value=int(X['tenure'].min()), max_value=int(X['tenure'].max()), step=1)
+tenure = st.sidebar.slider("Antigüedad (en meses)", min_value=int(X['tenure'].min()), max_value=int(X['tenure'].max()), step=1)
 monthly_charges = st.sidebar.number_input("Monthly Charges", min_value=0.0, step=0.1)
 
 # Entradas para variables categóricas
@@ -96,6 +108,8 @@ input_data.loc[0] = 0  # Inicia todas las variables en 0
 # Asignar valores a las variables numéricas
 input_data['tenure'] = tenure
 input_data['MonthlyCharges'] = monthly_charges
+input_data['MonthlyCharge_Tenure'] = monthly_charges * tenure
+input_data['HighCharges'] = (monthly_charges > 70).astype(int)
 
 # Convertir género a dummies
 if gender == "Male":
@@ -115,8 +129,11 @@ elif payment_method == "Mailed check":
 elif payment_method == "Credit card (automatic)":
     input_data['PaymentMethod_Credit card (automatic)'] = 1
 
+# Escalar las variables numéricas del input de usuario usando el escalador entrenado
+input_data_scaled = scaler.transform(input_data)
+
 # Predecir y mostrar resultado
-churn_proba = best_model.predict_proba(input_data)[0][1] * 100  # probabilidad de churn
+churn_proba = best_model.predict_proba(input_data_scaled)[0][1] * 100  # probabilidad de churn
 st.write(f"Probabilidad de Churn: {churn_proba:.2f}%")
 
 if churn_proba >= 50:
